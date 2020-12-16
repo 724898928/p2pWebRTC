@@ -22,3 +22,7 @@ yarn lint
 
 ### Customize configuration
 See [Configuration Reference](https://cli.vuejs.org/config/).
+### Customize configuration
+本实例代码配合信令服务器使用
+See[p2pServer](https://github.com/724898928/p2pServer).
+
