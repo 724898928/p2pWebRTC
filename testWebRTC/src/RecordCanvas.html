@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <dic>
+        <canvas ref="canvas"></canvas>
+    </dic>
+    <video ref="myVideo" autoplay playsinline></video>
+    <button @click="startCaptureCanvas" style="margin-right: 10px">开始</button>
+    <button @click="stopRecord" style="margin-right: 10px">停止</button>
+</div>
+</body>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "录制Canvas示例",
+            myVideo: null,
+            constranints: {video: {width: 2880, height: 1800}},
+            videoTracks: null,
+            stream: null,
+            recordedBlobs: [],  // 录制的数据
+            mediaRecorder: null,
+            canvas: null,
+            context: null
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.myVideo = this.$refs.myVideo;
+                this.canvas = this.$refs.canvas;
+                this.drawLine();
+            })
+        },
+        methods: {
+            drawLine() {
+                // 获取Canvas对象
+                this.context = this.canvas.getContext("2d");
+                // 填充颜色
+                this.context.fillStyle = '#CCC';
+                // 绘制Canvas背景
+                this.context.fillRect(0, 0, 320, 240);
+                this.context.lineWidth = 1;
+                // 画笔颜色
+                this.context.strokeStyle = '#FF0000';
+                // 监听画板鼠标按下事件 开始绘画
+                this.canvas.addEventListener("mousedown", this.startAction);
+                this.canvas.addEventListener("mouseup", this.endAction);
+
+            },
+            startAction(e) {
+                // 开始新的路径
+                this.context.beginPath();
+                // 将画笔移动到指定的坐标，类似起点
+                this.context.moveTo(e.offsetX, e.offsetY);
+                // 开始绘制
+                this.context.stroke();
+                // 监听鼠标移动事件
+                this.canvas.addEventListener('mousemove', this.moveAction);
+            },
+            moveAction(e) {
+                // 将画笔移动到结束坐标，类似终点
+                this.context.lineTo(e.offsetX, e.offsetY);
+                // 开始绘制
+                this.context.stroke();
+            },
+            endAction() {
+                // 移除鼠标移动事件
+                this.canvas.removeEventListener('mousemove', this.moveAction);
+            },
+            initMedia() {
+                return new Promise(() => {
+                    let stream = this.canvas.captureStream(10);
+                    window.stream = stream;
+                    this.stream = stream;
+                    this.videoTracks = stream.getVideoTracks();
+                    this.myVideo.srcObject = stream;
+                    console.log(`视频资源名称: ${this.videoTracks[0].label}`)
+                    this.startRecord();
+                });
+            },
+            startCaptureCanvas() {
+                this.initMedia().then(() => {
+
+                }).catch(e => {
+                    alert(e);
+                });
+            },
+            startRecord() {
+                try {
+                    this.mediaRecorder = new MediaRecorder(window.stream, {mimeType: 'video/webm'});
+                } catch (e) {
+                    console.error('创建MediaRecorder错误:', e);
+                    return;
+                }
+                //录制停止事件监听
+                this.mediaRecorder.onstop = (event) => {
+                    console.log('录制停止: ', event);
+                    console.log('录制的Blobs数据为: ', this.recordedBlobs);
+                };
+                // 录制数据回调事件
+                this.mediaRecorder.ondataavailable = (event) => {
+                    console.log('startRecord', event)
+                    if (event.data && event.data.size > 0) {
+                        this.recordedBlobs.push(event.data);
+                    }
+                }
+                // 开始录制并指定录制时间为10秒
+                this.mediaRecorder.start(10)
+                console.log('MediaRecorder started', this.mediaRecorder);
+            },
+            stopRecord(e) {
+                // 停止录制
+                if (this.mediaRecorder) {
+                    this.mediaRecorder.stop();
+                    this.mediaRecorder = null;
+
+                    // 停掉所有的通道
+                    if (this.stream) {
+                        this.stream.getTracks().forEach(track => track.stop());
+                        this.stream = null;
+                    }
+                    // 生成blob文件，类型为video/webm
+                    let blob = new Blob(this.recordedBlobs, {type: 'video/webm'});
+                    // 创建一个下载连接
+                    let url = window.URL.createObjectURL(blob);
+                    let a = document.createElement("a");
+                    a.style.display = 'none';
+                    a.href = url;
+                    // 指定下载文件类型
+                    a.download = 'screen.webm';
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        // 释放url对象.
+                        window.URL.revokeObjectURL(url);
+                    }, 100)
+                }
+            },
+        }
+    })
+</script>
+</html>

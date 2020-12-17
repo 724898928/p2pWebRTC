@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <p>视频预览 muted表示默认静音</p>
+    <video ref="videoPreview" playsinline autoplay muted></video>
+    <p>视频回放 loop表示循环播放</p>
+    <video ref="videoPlayer" playsinline loop></video>
+    <div>
+        <button @click="startClickHandler" :disabled="this.state.status != 'start'">打开摄像头</button>
+        <button @click="startRecordButtonClickHandler" :disabled="this.state.status != 'startRecord'">开始录制</button>
+        <button @click="stopRecordButtonClickHandler" :disabled="this.state.status != 'stopRecord'">停止录制</button>
+        <button @click="playButtonClickHandler" :disabled="this.state.status != 'play'">播放</button>
+        <button @click="downloadButtonClickHandler" :disabled="this.state.status != 'download'">下载</button>
+    </div>
+</div>
+</body>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "录制视频示例",
+            videoPreview: null,
+            videoPlayer: null,
+            state: {
+                status: 'start',
+            },
+            recordedBlobs: [],
+            mediaRecorder: null,
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.videoPreview = this.$refs.videoPreview;
+                this.videoPlayer = this.$refs.videoPlayer;
+            })
+        },
+        methods: {
+            initMedia() {
+                let constraints = {audio: true, video: {width: 1280, height: 720}};
+                //获取视频数据流
+                navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+                        this.stream = stream;
+                        //将stream与window.stream绑定
+                        window.stream = stream;
+                        this.videoPreview.srcObject = stream;
+                    }
+                ).catch(e => {
+                    alert(e);
+                });
+            },
+            //点击打开视频按钮
+            startClickHandler() {
+                this.initMedia();
+                //设置当前状态为startRecord
+                this.state.status = 'startRecord';
+            },
+            // 开始录制
+            startRecordButtonClickHandler() {
+                let options = {mineType: 'video/webm;codecs=vp9'};
+                if (!MediaRecorder.isTypeSupported(options.mineType)){
+                    console.error("video/webm;codecs=vp9 不支持")
+                    options = {mineType: 'video/webm;codecs=vp8'};
+                    if (!MediaRecorder.isTypeSupported(options.mineType)){
+                        console.error("video/webm;codecs=vp8 不支持")
+                        options = {mineType: 'video/webm'};
+                        if (!MediaRecorder.isTypeSupported(options.mineType)){
+                            console.error("video/webm 不支持")
+                            options = {mineType: ''};
+                        }
+                    }
+                }
+
+                try {
+                    // 初始化mediaRecorder对象，传入视频流及媒体类型
+                    this.mediaRecorder = new MediaRecorder(window.stream, options);
+                } catch (e) {
+                    alert('创建MediaRecorder错误:'+ e);
+                    return;
+                }
+                // 录制停止事件回调
+                console.log('Recorded Blobs: ', this.recordedBlobs)
+                //当数据有效时触发的事件,可以把数据存储到缓存区里
+                this.mediaRecorder.ondataavailable = this.handleDataAvailable;
+                //录制10秒
+                this.mediaRecorder.start(10);
+                console.log('MediaRecorder started', this.mediaRecorder);
+                //设置当前状态为stopRecord
+                this.state.status = 'stopRecord';
+            },
+            //停止录制
+            stopRecordButtonClickHandler() {
+                this.mediaRecorder.stop();
+                //设置当前状态为play
+                this.state.status = 'play';
+            },
+            handleDataAvailable(event) {
+                console.log('handleDataAvailable', event)
+                if (event.data && event.data.size > 0) {
+                    this.recordedBlobs.push(event.data);
+                }
+            },
+            //播放录制数据
+            playButtonClickHandler() {
+                //生成blob文件,类型为video/webm
+                let blob = new Blob(this.recordedBlobs, {type: 'video/webm'});
+                this.videoPlayer.src = null;
+                this.videoPlayer.srcObject = null;
+                //URL.createObjectURL()方法会根据传入的参数创建一个指向该参数对象的URL
+                this.videoPlayer.src = window.URL.createObjectURL(blob);
+                this.videoPlayer.controls = true;
+                //播放视频
+                this.videoPlayer.play();
+                //设置当前状态为download
+                this.state.status = 'download';
+            },
+            //下载录制文件
+            downloadButtonClickHandler() {
+                //生成blob文件,类型为video/webm
+                let blob = new Blob(this.recordedBlobs, {type: 'video/webm'});
+                //URL.createObjectURL()方法会根据传入的参数创建一个指向该参数对象的URL
+                let url = window.URL.createObjectURL(blob);
+                //创建a标签
+                let a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                //设置下载文件
+                a.download = 'test.webm';
+                //将a标签添加至网页上去
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    //URL.revokeObjectURL()方法会释放一个通过URL.createObjectURL()创建的对象URL.
+                    window.URL.revokeObjectURL(url);
+                }, 100)
+                //设置当前状态为start
+                this.state.status = "start";
+            }
+
+        }
+    })
+</script>
+</html>

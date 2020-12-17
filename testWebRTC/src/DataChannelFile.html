@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <div>
+        <form id="fileInfo">
+            <input type="file" ref="fileInput" name="files">
+        </form>
+        <div>
+            <h2>发送</h2>
+            <progress ref="sendProgress" max="0" value="0"></progress>
+        </div>
+        <div>
+            <h2>接收</h2>
+            <progress ref="receiveProgress" max="0" value="0"></progress>
+        </div>
+    </div>
+    <a ref="downLoad"></a>
+    <div>
+        <button @click="startSendFile">发送</button>
+        <button @click="cancleSendFile">取消</button>
+        <button @click="closeChannel">关闭</button>
+    </div>
+</div>
+</body>
+<style>
+    progress {
+        width: 500px;
+    }
+</style>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "发送文件示例",
+            stream: null,
+            fileInput: null,
+            sendProgress: null,
+            receiveProgress: null,
+            downLoad: null,
+            localConnection: null,
+            remoteConnection: null,
+            sendChannel: null,
+            fileReader: null,
+            receivedSize: 0,
+            receiveBuffer: [],
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.fileInput = this.$refs.fileInput;
+                this.sendProgress = this.$refs.sendProgress;
+                this.receiveProgress = this.$refs.receiveProgress;
+                this.downLoad = this.$refs.downLoad;
+            })
+        },
+        methods: {
+            tryCatch(backFun) {
+                try {
+                    if (backFun instanceof Function) {
+                        backFun();
+                    }
+                } catch (e) {
+                    console.log('方法执行失败: ' + backFun.prototype.name + ` 创建会话描述错误:${e.toString()}`);
+                }
+            },
+            startSendFile() {
+                // 创建RTC对象
+                this.localConnection = new RTCPeerConnection();
+                // 监听返回的candidate信息
+                this.localConnection.addEventListener('icecandidate', this.onLocalIceCandidate);
+                // 实例化发送通道
+                this.sendChannel = this.localConnection.createDataChannel('webrtc-datachannel');
+                // 数据类型为二进制
+                this.sendChannel.binaryType = 'arraybuffer';
+                //onopen事件监听
+                this.sendChannel.addEventListener('open', this.onSendChannelStateChange);
+                // onclose事件监听
+                this.sendChannel.addEventListener('close', this.onSendChannelStateChange);
+
+                // 创建RTCPeerConnection对象
+                this.remoteConnection = new RTCPeerConnection();
+                // 监听返回的candidate信息
+                this.remoteConnection.addEventListener('icecandidate', this.onRemoteIceCandidate);
+                // 远端连接数据到达事件监听
+                this.remoteConnection.addEventListener('datachannel', this.receiveChannelCallback);
+
+                // 创建提议offer
+                this.tryCatch(() => {
+                    this.localConnection.createOffer().then(offer => {
+                        // 创建offer成功
+                        this.onCreateOfferSuccess(offer);
+                    })
+                })
+            },
+            onCreateOfferSuccess(desc) {
+                // 设置localConnection的本地描述
+                this.localConnection.setLocalDescription(desc);
+                // 设置remoteConnection的远端描述
+                this.remoteConnection.setRemoteDescription(desc)
+                this.tryCatch(() => {
+                    this.remoteConnection.createAnswer().then(answer => {
+                        this.onCreateAnswerSuccess(answer);
+                    })
+                })
+            },
+            onCreateAnswerSuccess(answer) {
+                this.tryCatch(() => {
+                    // remoteConnection的本地描述
+                    this.remoteConnection.setLocalDescription(answer);
+                    // 设置localConnection的远端描述
+                    this.localConnection.setRemoteDescription(answer);
+                })
+            },
+            // Candidate事件的回调方法
+            onLocalIceCandidate(event) {
+                this.tryCatch(() => {
+                    if (event.candidate) {
+                        // 将会localConnection的candidate添加至remoteConnection里
+                        this.remoteConnection.addIceCandidate(event.candidate);
+                    }
+                })
+            },
+            // Candidate事件的回调方法
+            onRemoteIceCandidate(event) {
+                this.tryCatch(() => {
+                    if (event.candidate) {
+                        this.localConnection.addIceCandidate(event.candidate);
+                    }
+                })
+            },
+            // 发送通道状态变化
+            onSendChannelStateChange() {
+                let readyState = this.sendChannel.readyState;
+                console.log('发送通道状态:' + readyState)
+                if (readyState === 'open') {
+                    this.sendData();
+                }
+            },
+            // 接收通道数据到达回调方法
+            receiveChannelCallback(event) {
+                // 实例化接收通道
+                this.receiveChannel = event.channel;
+                // 数据类型为二进制
+                this.receiveChannel.binaryType = 'arraybuffer';
+                // 接收消息事件监听
+                this.receiveChannel.onmessage = this.onReceiveMessageCallback;
+                // onopen事件监听
+                this.receiveChannel.onopen = this.onReceiveChannelStateChange;
+                // onclose事件的监听
+                this.receiveChannel.onclose = this.onReceiveChannelStateChange;
+                this.receivedSize = 0;
+            },
+            onReceiveMessageCallback(event) {
+                // 将接收到的数据添加到接收缓存里
+                this.receiveBuffer.push(event.data);
+                // 设置当前接收文件的大小
+                this.receivedSize += event.data.byteLength;
+                // 使用接收文件的大小表示当前接收进度
+                this.receiveProgress.value = this.receivedSize;
+
+                let file = this.fileInput.files[0];
+                // 判断当前接收的文件大小是否等于文件的大小
+                if (this.receivedSize === file.size) {
+                    // 根据缓存数据生成blob文件
+                    let received = new Blob(this.receiveBuffer);
+                    // 将缓存数据置空
+                    this.receiveBuffer = [];
+                    // 获取下载连接对象
+                    this.downLoad.href = URL.createObjectURL(received);
+                    this.downLoad.downLoad = file.name;
+                    this.downLoad.textContent = `点击下载'${file.name}'(${file.size} bytes)`;
+                    this.downLoad.style.display = 'block';
+                }
+
+            },
+            // 接收通道状态变化
+            onReceiveChannelStateChange() {
+                const readyState = this.receiveChannel.readyState;
+                console.log('接收通道状态:' + readyState);
+            },
+            // 取消发送文件
+            cancleSendFile() {
+                if (this.fileReader && this.fileReader.readyState === 1) {
+                    this.fileReader.abort();
+                }
+            },
+            sendData() {
+                let file = this.fileInput.files[0];
+                console.log(`文件是:${[file.name, file.size, file.type].join(' ')}`);
+
+                // 设置发送进度条的最大值
+                this.sendProgress.max = file.size;
+                // 设置接收进度条的最大值
+                this.receiveProgress.max = file.size;
+
+                // 文件切片大小，即每次读取的文件大小
+                let chunkSize = 16384;
+                // 实例化文件读取对象
+                this.fileReader = new FileReader();
+                // 偏移量可用于表示进度
+                let offset = 0;
+                this.fileReader.addEventListener('error', e => {
+                    console.error('读取文件出错:', e);
+                });
+                this.fileReader.addEventListener('abort', e => {
+                    console.log('读取文件取消:', e);
+                });
+                this.fileReader.addEventListener('load', e => {
+                    console.log('文件加载完成 ', e);
+                    // 使用发送通道开始发送文件数据
+                    this.sendChannel.send(e.target.result);
+                    // 使用文件二进制数据长度作为偏移量
+                    offset += e.target.result.byteLength;
+                    // 使用偏移量作为发送进度
+                    this.sendProgress.value = offset;
+                    if (offset < file.size) {
+                        // 继续读取
+                        readSlice(offset);
+                    }
+
+                });
+                // 读取切片
+                let readSlice = (o) => {
+                    // 将文件的某一段切割下来，从offset到offset + chunkSize位置切下
+                    let slice = file.slice(offset, o + chunkSize);
+                    // 读取切片的二进制数据
+                    this.fileReader.readAsArrayBuffer(slice);
+                };
+                // 首次读取0到chunkSize大小的切片数据
+                readSlice(0);
+            },
+            closeChannel() {
+                this.sendChannel.close();
+                if (this.receiveChannel) {
+                    this.receiveChannel();
+                }
+                this.localConnection.close();
+                this.remoteConnection.close();
+                this.localConnection = null;
+                this.remoteConnection = null;
+            },
+        }
+    })
+</script>
+</html>

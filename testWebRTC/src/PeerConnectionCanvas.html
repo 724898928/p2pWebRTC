@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <div>
+        <canvas ref="canvas"></canvas>
+    </div>
+    <video ref="remoteVideo" autoplay playsinline></video>
+    <div>
+        <button @click="call">呼叫</button>
+        <button @click="hangup">挂断</button>
+    </div>
+</div>
+</body>
+<style>
+    button {
+        margin-right: 10px;
+    }
+</style>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "电子白板同步示例",
+            remoteVideo: null,
+            peerConnA: null,
+            peerConnB: null,
+            stream: null,
+            canContext: null,
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.remoteVideo = this.$refs.remoteVideo;
+                this.canvas = this.$refs.canvas;
+                this.startCaptureCanvas();
+            })
+        },
+        methods: {
+            startCaptureCanvas() {
+                this.localStream = this.canvas.captureStream(10);
+                this.drawLine();
+            },
+            drawLine() {
+                // 获取canvas的2d内容
+                this.canContext = this.canvas.getContext('2d');
+                // 填充颜色
+                this.canContext.fillStyle = '#CCC';
+                // 绘制矩形背景
+                this.canContext.fillRect(0, 0, 320, 240);
+
+                this.lineWidth = 1;
+                // 画笔颜色
+                this.canContext.strokeStyle = "#FF0000";
+                // 监听画板鼠标按下的事件 开始绘画
+                this.canvas.addEventListener("mousedown", this.startAction);
+                // 监听画板鼠标抬起事件 结束绘画
+                this.canvas.addEventListener("mouseup", this.endAction);
+            },
+            startAction(event) {
+                this.canContext.beginPath();
+                this.canContext.moveTo(event.offsetX, event.offsetY);
+                this.canContext.stroke();
+                this.canvas.addEventListener("mousemove", this.moveAction);
+            },
+            moveAction(event) {
+                this.canContext.lineTo(event.offsetX, event.offsetY);
+                this.canContext.stroke();
+            },
+            endAction() {
+                this.canvas.removeEventListener("mousemove", this.moveAction)
+            },
+            call() {
+                let videoTracks = this.localStream.getVideoTracks();
+                let audioTracks = this.localStream.getAudioTracks();
+                let configuration = {"iceServers": [{"url": "stun:stun.l.google.com:19302"}]};
+
+                this.peerConnA = new RTCPeerConnection(configuration);
+                this.peerConnA.addEventListener('icecandidate', this.onIceCandidateA);
+
+                this.peerConnB = new RTCPeerConnection(configuration);
+                this.peerConnB.addEventListener('icecandidate', this.onIceCandidateB);
+                this.peerConnB.addEventListener('track', this.getRemoteStream);
+                this.localStream.getTracks().forEach(track => {
+                    this.peerConnA.addTrack(track, this.localStream);
+                });
+
+                try {
+                    this.peerConnA.createOffer().then(offer => {
+                        this.onCreateOfferSuccess(offer);
+                    })
+                } catch (e) {
+
+                }
+            },
+            onIceCandidateA(event) {
+                if (event.candidate) {
+                    this.peerConnB.addIceCandidate(event.candidate);
+                }
+            },
+            onIceCandidateB(event) {
+                if (event.candidate) {
+                    this.peerConnA.addIceCandidate(event.candidate);
+                }
+            },
+            onCreateOfferSuccess(offer) {
+                this.peerConnA.setLocalDescription(offer);
+                this.peerConnB.setRemoteDescription(offer);
+                this.peerConnB.createAnswer().then(answer => {
+                    this.onCreateAnswerSuccess(answer);
+                });
+            },
+            onCreateAnswerSuccess(answer) {
+                this.peerConnB.setLocalDescription(answer);
+                this.peerConnA.setRemoteDescription(answer);
+            },
+            getRemoteStream(event) {
+                if (this.remoteVideo !== event.streams[0]) {
+                    this.remoteVideo.srcObject = event.streams[0];
+                }
+            },
+            //创建会话描述错误
+            onCreateSessionDescriptionError(error) {
+                console.log(`创建会话描述SD错误: ${error.toString()}`);
+            },
+            hangup() {
+                this.peerConnA.close();
+                this.peerConnB.close();
+                this.peerConnA = null;
+                this.peerConnB = null;
+            },
+        }
+    })
+</script>
+</html>

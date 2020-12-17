@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<script type="application/javascript" src="./js/Soundmeter.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <div @style="myStyle">
+        <audio ref="myAudio"></audio>
+    </div>
+</div>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "音量检测",
+            myStyle: ' width: '+this.audioLevel + 'px\',\n' +
+                '          height: \'10px\',\n' +
+                '          backgroundColor: \'#8dc63f\',\n' +
+                '          marginTop: \'20px\'',
+            //音量值
+            audioLevel: 0,
+            myAudio: null
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.initMedia();
+                this.myAudio = this.$refs.myAudio
+                this.soundMeterProcess()
+            })
+        },
+        methods: {
+            initMedia: function () {
+                try {
+                    // AudioContext是用于管理和播放所有声音
+                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                    // 实例化AudioContext
+                    window.audioContext = new AudioContext();
+                } catch (e) {
+                    alert("网页音频API不支持")
+                    return;
+                }
+                let soundMeter = window.soundMeter = new Soundmeter(window.audioContext);
+                const constraints = window.constranints = {audio: true, video: false}
+                navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+                    window.stream = stream;
+                    this.myAudio.srcObject = stream;
+                    // 将声音测量对象与流连接起来
+                    soundMeter.connectToSource(stream);
+                    // 开始实时读取音量值
+                    setTimeout(this.soundMeterProcess, 100);
+                }).catch(e => {
+                    alert(e)
+                })
+            },
+            // 音频音量处理
+            soundMeterProcess: () => {
+                // 读取声音值，再乘以一个系数，可以得到音量条的宽度
+                var val = (window.soundMeter.instant.toFixed(2) * 348) + 1;
+                this.audioLevel = val
+                // 设置音量值状态
+                this.myAudio.volume = val;
+                //   this.setState({audioLevel: val});
+                // 每隔100毫秒调用一次soundMeterProcess函数，模拟实时检测音频音量
+                setTimeout(this.soundMeterProcess, 100);
+            }
+        }
+    })
+</script>
+</body>
+</html>

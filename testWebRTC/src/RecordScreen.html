@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <video ref="myVideo" autoplay playsinline></video>
+    <button @click="startCaptureScreen" style="margin-right: 10px">开始</button>
+    <button @click="stopRecord" style="margin-right: 10px">停止</button>
+</div>
+</body>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "录制屏幕示例",
+            myVideo: null,
+            constranints: {video: {width: 2880, height: 1800}},
+            videoTracks: null,
+            stream: null,
+            recordedBlobs: [],  // 录制的数据
+            mediaRecorder: null,
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.myVideo = this.$refs.myVideo;
+            })
+        },
+        methods: {
+            initMedia() {
+                return new Promise(() => {
+                    navigator.mediaDevices.getDisplayMedia(this.constranints).then((stream) => {
+                            window.stream = stream;
+                            this.stream = stream;
+                            this.videoTracks = stream.getVideoTracks();
+                            console.log(`视频资源名称: ${this.videoTracks[0].label}`)
+                            this.myVideo.srcObject = stream
+                            this.startRecord();
+                        }
+                    ).catch(e => {
+                        alert(e);
+                    });
+                });
+            },
+
+            startCaptureScreen() {
+                this.initMedia().then(() => {
+                }).catch(e => {
+                    alert(e);
+                });
+            },
+            startRecord() {
+                this.stream.addEventListener('inactive', e => {
+                    console.log('监听到屏幕捕获停止后停止录制!')
+                    this.stopRecord(e);
+                })
+                try {
+                    this.mediaRecorder = new MediaRecorder(window.stream, {mimeType: 'video/webm'});
+                } catch (e) {
+                    console.error('创建MediaRecorder错误:', e);
+                    return;
+                }
+                //录制停止事件监听
+                this.mediaRecorder.onstop = (event) => {
+                    console.log('录制停止: ', event);
+                    console.log('录制的Blobs数据为: ', this.recordedBlobs);
+                };
+                // 录制数据回调事件
+                this.mediaRecorder.ondataavailable = (event) => {
+                    console.log('startRecord', event)
+                    if (event.data && event.data.size > 0) {
+                        this.recordedBlobs.push(event.data);
+                    }
+                }
+                // 开始录制并指定录制时间为10秒
+                this.mediaRecorder.start(10)
+                console.log('MediaRecorder started', this.mediaRecorder);
+            },
+            stopRecord(e) {
+                // 停止录制
+                if (this.mediaRecorder) {
+                    this.mediaRecorder.stop();
+                    this.mediaRecorder = null;
+
+                    // 停掉所有的通道
+                    if (this.stream) {
+                        this.stream.getTracks().forEach(track => track.stop());
+                        this.stream = null;
+                    }
+                    // 生成blob文件，类型为video/webm
+                    let blob = new Blob(this.recordedBlobs, {type: 'video/webm'});
+                    // 创建一个下载连接
+                    let url = window.URL.createObjectURL(blob);
+                    let a = document.createElement("a");
+                    a.style.display = 'none';
+                    a.href = url;
+                    // 指定下载文件类型
+                    a.download = 'screen.webm';
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        if (this.isChildOf(a, document.body)) {
+                            document.body.removeChild(a);
+                        }
+                        // 释放url对象.
+                        window.URL.revokeObjectURL(url);
+                    }, 100)
+                }
+            },
+//参数说明:child表示指定某个节点,parent表示child节点是否存在于parent节点中
+            isChildOf(child, parent) {
+                console.log("参数child=" + child + "-" + child.nodeName, "参数parent=" + parent + "-" + parent.nodeName);
+                if (child && parent) {
+                    var myParentNode = child.parentNode; //定义临时变量，并初始化为child参数的父节点
+                    while (myParentNode) {
+                        console.log("myParentNode=" + myParentNode + "-" + myParentNode.nodeName);
+                        if (myParentNode === parent) {
+                            //如果myParentNode等于parent参数，则证明child参数是parent参数的后代
+                            return true;
+                        } else {
+                            //找myParentNode的上一代
+                            myParentNode = myParentNode.parentNode;
+                        }
+                    }
+                }
+                //遍历结束后，都没有返回true，则说明child参数找不到它的祖先parent参数
+                return false;
+            }
+        }
+    })
+</script>
+</html>

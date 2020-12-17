@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="./js/vue.min.js"></script>
+</head>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <div>
+        <video id="myVideo" ref="myVideo" playsinline autoplay></video>
+        {/* 画布Canvas */}
+        <canvas id="myCanvas"></canvas>
+    </div>
+    <button @click="takeSnap">截屏</button>
+</div>
+</body>
+<script>
+    new Vue({
+            el: '#vue',
+            data: {
+                message: '截取视频示例',
+                myVideo: null,
+                canvas: null,
+            },
+            mounted: function () {
+                this.$nextTick((event) => {
+                    this.initMedia();
+                    this.canvas = document.getElementById("myCanvas");
+                })
+            },
+            methods: {
+                initMedia: function () {
+                    let constraints = {audio: false, video: true};
+                    navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+                       // this.myVideo = document.getElementById("myVideo");
+                        this.myVideo = this.$refs.myVideo;
+                        let videoTracks = stream.getVideoTracks();
+                        console.log(videoTracks[0].label)
+                        window.stream = stream;
+                        this.myVideo.srcObject = stream;
+                    }).catch(function (err) {
+                        if (err.name === 'ConstraintNotSatisfiedError') {
+                            const v = constraints.video;
+                            //  宽高尺寸错误
+                            alert('宽: ' + v.width.exact + " 高:" + v.height.exact);
+                        } else if (err.name === 'permissionDeniedError') {
+                            alert("没权限");
+                        }
+                        alert(err);
+                        console.log(err);
+                    })
+                },
+                takeSnap: function (e) {
+                    this.canvas.width = this.myVideo.videoWidth;
+                    this.canvas.height = this.myVideo.videoHeight;
+                    this.canvas.getContext('2d').drawImage(this.myVideo,0,0,this.canvas.width,this.canvas.height)
+                }
+            }
+        }
+    )
+</script>
+</html>

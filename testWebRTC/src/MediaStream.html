@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <video name="myVideo" ref="myVideo" playsinline autoplay></video>
+    <button v-on:click="btnGetTracks">获取所有轨道</button>
+    <button v-on:click="btnGetAudioTracks">获取音频轨道</button>
+    <button v-on:click="btnGetTrackById">根据Id获取音频轨道</button>
+    <button v-on:click="btnRemoveAudioTrack">删除音频轨道</button>
+    <button v-on:click="btnGetVideoTracks">获取视频轨道</button>
+    <button v-on:click="btnRemoveVideoTrack">删除视频轨道</button>
+</div>
+</body>
+<style>
+    button {
+        width: 120px;
+    }
+</style>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "MediaStreamAPI测试",
+            myVideo: null,
+            stream: null
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.myVideo = this.$refs.myVideo;
+                this.openDevice();
+            })
+        },
+        methods: {
+            openDevice() {
+                navigator.mediaDevices.getUserMedia({audio: true, video: true}).then((stream) => {
+                        this.stream = stream;
+                        window.stream = stream;
+                        this.myVideo.srcObject = stream
+                    }
+                ).catch(e => {
+                    alert(e);
+                });
+            },
+            btnGetTracks() {
+                let tracks = this.stream.getTracks();
+                console.log(tracks);
+            },
+            btnGetAudioTracks() {
+                console.log(this.stream.getAudioTracks());
+            },
+            btnGetTrackById() {
+                console.log(this.stream.getTrackById(this.stream.getAudioTracks()[0].id));
+            },
+            btnRemoveAudioTrack() {
+                this.stream.removeTrack(this.stream.getAudioTracks()[0]);
+            },
+            btnGetVideoTracks() {
+                console.log(this.stream.getVideoTracks());
+            },
+            btnRemoveVideoTrack() {
+                this.stream.removeTrack(this.stream.getVideoTracks()[0]);
+            }
+        }
+    })
+</script>
+</html>

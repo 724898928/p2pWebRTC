@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>webRtcTest</title>
+    <script src="https://cdn.staticfile.org/vue/2.2.2/vue.min.js"></script>
+</head>
+<body>
+<div id="app">
+    <h1>{{ message }}</h1>
+    <audio class="audio" id="myAudio" ref="audio" controls playsinline></audio>
+    <p class="warning">警告: 如果没有使用头戴式耳机，声音会反馈到扬声器。</p>
+</div>
+
+<script>
+    new Vue({
+        el: '#app',
+        component: {},
+        props: {},
+        data: function () {
+            return {
+                message: 'play video!',
+                audio: null,
+            }
+        },
+        // 生命周期方法
+        mounted: function () {
+            this.$nextTick(function () {
+                this.initMedia();
+                // Code that will run only after the
+                // entire view has been rendered
+            })
+        },
+        methods: {
+            initMedia: function (event) {
+                const constraints = window.constraints = {audio: true, video: false};
+                /* 准备和获取视频流 */
+                navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+                    this.audio = document.getElementById("myAudio");
+                    let audioTracks = stream.getAudioTracks();
+                    stream.oninactive = () => {
+                        alert("Stream stop");
+                    }
+                    // 是浏览器能
+                    window.stream = stream;
+                    this.audio.srcObject = stream;
+                }).catch(function (err) {
+                    if (err.name === 'ConstraintNotSatisfiedError') {
+                        const v = constraints.video;
+                        //  宽高尺寸错误
+                        alert('宽: ' + v.width.exact + " 高:" + v.height.exact);
+                    } else if (err.name === 'permissionDeniedError') {
+                        alert("没权限");
+                    }
+                    alert(err);
+                    console.log(err);
+                })
+            }
+        },
+
+    })
+</script>
+</body>
+</html>

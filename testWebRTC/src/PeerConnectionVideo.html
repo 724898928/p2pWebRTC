@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <p>MP4视频路径</p>
+    <video ref="localVideo" playsinline controls loop muted v-on:canplay="canPlay">
+        <source src="./assets/webrtc.mp4" type="video/mp4"/>
+    </video>
+    <p>远端视频</p>
+    <video ref="remoteVideo" autoplay playsinline></video>
+    <div>
+        <button @click="call">呼叫</button>
+        <button @click="hangup">挂断</button>
+    </div>
+</div>
+</body>
+<style>
+    button {
+        margin-right: 10px;
+    }
+</style>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "",
+            localVideo: null,
+            remoteVideo: null,
+            stream: null,
+            peerConnA: null,
+            peerConnB: null,
+            localStream: null,
+        },
+        mounted: function () {
+            this.$nextTick(event => {
+                this.localVideo = this.$refs.localVideo;
+                this.remoteVideo = this.$refs.remoteVideo;
+            })
+        },
+        methods: {
+            // 开始播放
+            canPlay() {
+                // 捕获帧率
+                let fps = 0;
+                // 浏览器兼容判断，捕获媒体流
+                this.localStream = this.localVideo.captureStream(fps);
+            },
+            // 呼叫
+            call() {
+                this.localVideo;
+                console.log('开始呼叫 '+this.localVideo);
+                let videoTracks = this.localStream.getVideoTracks();
+                let audioTracks = this.localStream.getAudioTracks();
+                if (videoTracks.length > 0) {
+                    console.log(`使用的视频设备为:${videoTracks[0].label}`);
+                }
+                if (audioTracks.length > 0) {
+                    console.log(`使用的音频设备为:${audioTracks[0].label}`);
+                }
+                // 设置ICE Server，使用Google服务器
+                let configuration = {"iceServer": [{"url": "stun:stun.l.google.com:19302"}]};
+                // 创建RTCPeerConnection对象
+                this.peerConnA = new RTCPeerConnection(configuration);
+                // 监听返回的Candidate信息
+                this.peerConnA.addEventListener('icecandidate', this.onIceCandidateA);
+                // 监听ICE状态的变化
+                this.peerConnA.addEventListener('iceconnectionstatechange', this.onIceStateChangeA);
+
+                this.peerConnB = new RTCPeerConnection(configuration);
+                // 监听返回的Candidate信息
+                this.peerConnB.addEventListener('icecandidate', this.onIceCandidateB);
+                // 监听ICE状态的变化
+                this.peerConnB.addEventListener('iceconnectionstatechange', this.onIceStateChangeB);
+                // 监听track事件，可以获取到远端视频流
+                this.peerConnB.addEventListener('track', this.getRemoteStream);
+
+                // 循环迭代本地流的所有轨道
+                this.localStream.getTracks().forEach(track => {
+                    // 把音视频轨道添加到连接中去
+                    this.peerConnA.addTrack(track, this.localStream);
+                })
+
+                try {
+                    // 创建提议offer
+                    this.peerConnA.createOffer().then(offer => {
+                        // 创建Offer成功
+                        this.onCreateOfferSuccess(offer);
+                    });
+                } catch (e) {
+                    // 创建offer失败
+                    this.onCreateSessionDescriptionError(e);
+                }
+
+            },
+            getRemoteStream(event) {
+
+            },
+            // 创建提议offer成功
+            onCreateOfferSuccess(offer) {
+                // 设置peerConnA的本地描述
+                try {
+                    this.peerConnA.setLocalDescription(offer).then(() => {
+                        this.onSetLocalSuccess(this.peerConnA);
+                    });
+                } catch (e) {
+                    this.onCreateSessionDescriptionError();
+                }
+
+                // 设置peerConnB的远端描述
+                try {
+                    this.peerConnB.setRemoteDescription(offer).then(() => {
+                        this.onSetRemoteSuccess(this.peerConnB);
+                    });
+                } catch (e) {
+                    this.onCreateSessionDescriptionError(e);
+                }
+
+                try {
+                    // 创建应答Answer
+                    this.peerConnB.createAnswer().then(answer => {
+                        // 创建应答成功
+                        this.onCreateAnswerSuccess(answer);
+                    })
+                } catch (e) {
+                    this.onCreateSessionDescriptionError(e);
+                }
+
+            },
+            getName(pc) {
+                return (pc === this.peerConnA) ? 'peerConnA' : 'peerConnB';
+            },
+            onSetLocalSuccess(pc) {
+                console.log(`${this.getName(pc)}设置本地描述完成:setLocalDescription`);
+            },
+            // 创建应答成功
+            onCreateAnswerSuccess(answer) {
+                try {
+                    // 设置peerConnB的本地描述信息
+                    this.peerConnB.setLocalDescription(answer).then(() => {
+                        this.onSetLocalSuccess(this.peerConnB);
+                    })
+                } catch (e) {
+                    this.onCreateSessionDescriptionError(e);
+                }
+                try {
+                    // 设置peerConnA的远端描述,即peerConnB的应答信息
+                    this.peerConnA.setRemoteDescription(answer).then(() => {
+                        this.onSetRemoteSuccess(this.peerConnA);
+                    });
+                } catch (e) {
+                    this.onCreateSessionDescriptionError(e);
+                }
+
+            },
+            onSetRemoteSuccess(pc) {
+                console.log(`${this.getName(pc)}设置远端描述完成:setRemoteDescription`);
+            },
+            onCreateSessionDescriptionError(error) {
+                console.log(`创建会话描述SD错误: ${error.toString()}`);
+            },
+            onAddIceCandidateSuccess(pc){
+                console.log(`${this.getName(pc)}添加IceCandidate成功`);
+            },
+            // 获取远端的视频流
+            getRemoteStream(e) {
+                if (this.remoteVideo.srcObject !== e.streams[0]) {
+                    // 获取集合第一个元素
+                    this.remoteVideo.srcObject = e.streams[0];
+                }
+            },
+            // Candidate事件回调方法
+            onIceCandidateA(event) {
+                try {
+                    if (event.candidate) {
+                        //将会peerConnA的Candidate添加至peerConnB里
+                        this.peerConnB.addIceCandidate(event.candidate);
+                        this.onAddIceCandidateSuccess(this.peerConnB)
+                    }
+                } catch (e) {
+                    this.onAddIceCandidateError(this.peerConnB, e);
+                }
+            },
+            onIceCandidateB(event) {
+                try{
+                    if (event.candidate){
+                        //将会peerConnB的Candidate添加至peerConnA里
+                        this.peerConnA.addIceCandidate(event.candidate).then(()=>{
+                            this.onAddIceCandidateSuccess(this.peerConnA);
+                        })
+                    }
+                }catch (e) {
+                    this.onAddIceCandidateError(this.peerConnA,e);
+                }
+            },
+            onIceStateChangeA(event) {
+                console.log(`peerConnA连接的ICE状态: ${this.peerConnA.iceConnectionState}`);
+                console.log('ICE状态改变事件: ', event);
+            },
+            onIceStateChangeB(event) {
+                console.log(`peerConnB连接的ICE状态: ${this.peerConnB.iceConnectionState}`);
+                console.log('ICE状态改变事件: ', event);
+            },
+            hangup() {
+                console.log('结束会话');
+                this.peerConnA.close();
+                this.peerConnB.close();
+                this.peerConnA = null;
+                this.peerConnB = null;
+            }
+
+        }
+    })
+</script>
+</html>

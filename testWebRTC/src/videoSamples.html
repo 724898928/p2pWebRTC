@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <video ref="myVideo" autoplay playsinline></video>
+</div>
+</body>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "",
+            myVideo: null,
+            stream: null,
+        },
+        mounted: function () {
+            this.$nextTick(e=>{
+                this.myVideo = this.$refs.myVideo;
+                this.initMedia();
+            })
+        },
+        methods: {
+            initMedia (constranints){
+                navigator.mediaDevices.getUserMedia(constranints).then((stream) => {
+                        this.stream = stream;
+                        window.stream = stream;
+                        this.myVideo.srcObject = stream
+                    }
+                ).catch(e => {
+                    alert(e);
+                });
+            }
+
+        }
+    })
+</script>
+</html>

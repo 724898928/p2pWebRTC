@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="./js/vue.min.js"></script>
+</head>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <video :class="videoClass" ref="myVideo" playsinline autoplay></video>
+    <select ref="select" style="width: 100px" v-on:change="handleChange()">
+        <option value="none">没有滤镜</option>
+        <option value="blur">模糊</option>
+        <option value="grayscale">灰度</option>
+        <option value="invert">反转</option>
+        <option value="sepia">深褐色</option>
+    </select>
+</div>
+</body>
+<style>
+  @import "./css/video-filter.css";
+</style>
+
+
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: '视频滤镜示例',
+            myVideo: null,
+            select: null,
+            videoClass: null,
+        },
+        mounted: function () {
+            this.$nextTick(function () {
+                this.initMedia();
+                this.select = this.$refs.select;
+            })
+        },
+        methods: {
+            initMedia() {
+                let constranints = {audio: false, video: true}
+                navigator.mediaDevices.getUserMedia(constranints).then((stream) => {
+                    this.myVideo = this.$refs.myVideo;
+                    let videoTracks = stream.getVideoTracks()
+                    alert(videoTracks[0].label)
+                    window.stream = stream;
+                    this.myVideo.srcObject = stream;
+                }).catch((error) => {
+                    console.log('navigator.MediaDevices.getUserMedia error: ', error.message, error.name);
+                });
+            },
+            handleChange() {
+                this.videoClass = this.select.value
+            }
+        }
+    })
+</script>
+</html>

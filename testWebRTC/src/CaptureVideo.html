@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <!-- /* 源视频 显示控制按钮 循环播放 */-->
+    <video ref="sourceVideo" playsinline controls loop muted v-on:canPlay='canPlay()'>
+        <!-- {/* mp4视频路径 */}-->
+        <source src="./assets/webrtc.mp4" type="video/mp4">
+    </video>
+    <video ref="playerVideo" autoplay playsinline></video>
+</div>
+</body>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "捕获Video作为媒体流示例",
+            sourceVideo: null,
+            playerVideo: null,
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.sourceVideo = this.$refs.sourceVideo;
+                this.playerVideo = this.$refs.playerVideo;
+                //this.initMedia();
+            })
+        },
+        methods: {
+            initMedia(constranints) {
+                navigator.mediaDevices.getUserMedia(constranints).then((stream) => {
+                        this.stream = stream;
+                        window.stream = stream;
+                        this.myVideo.srcObject = stream
+                    }
+                ).catch(e => {
+                    alert(e);
+                });
+            },
+            canPlay() {
+                let stream;
+                const fps = 0;
+                if (this.sourceVideo.captureStream) {
+                    stream = this.sourceVideo.captureStream(fps);
+                } else if (this.sourceVideo.mozCaptureStream) {
+                    stream = this.sourceVideo.mozCaptureStream(fps);
+                } else {
+                    console.error('captureStream不支持')
+                    stream = null;
+                }
+                this.playerVideo.srcObject = stream;
+            }
+
+        }
+    })
+</script>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<link href="./css/datachannel.scss" type="text/css">
+<script src="./js/vue.min.js"></script>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <div>
+        <h2>发送</h2>
+        <textarea ref="dataChannelSend"  placeholder="请输入要发送的文本..."></textarea>
+    </div>
+    <div>
+        <h2>接收</h2>
+        <textarea ref="dataChannelReceive" disabled="false"></textarea>
+    </div>
+    <div>
+        <button @click="call">呼叫</button>
+        <button @click="sendData">发送</button>
+        <button @click="hangup">挂断</button>
+    </div>
+</div>
+</body>
+<style>
+    button {
+        margin-right: 10px;
+    }
+</style>
+<script>
+    new Vue({
+        el: '#vue',
+        data: {
+            message: "数据通道示例",
+            dCSend: null,
+            dCReceive: null,
+            // 设置ICE server, 使用Google服务器
+            configuration: {"iceServers": [{"url": "stun:stun.l.google.com:19302"}]},
+            localConnection: null,
+            remoteConnection: null,
+            sendChannel: null,
+            receiveChannel: null,
+        },
+        mounted: function () {
+            this.$nextTick(e => {
+                this.dCSend = this.$refs.dataChannelSend;
+                this.dCReceive = this.$refs.dataChannelReceive;
+
+
+            })
+        },
+        methods: {
+            call() {
+
+                this.localConnection = new RTCPeerConnection(this.configuration);
+                // 监听返回的candidate信息
+                this.localConnection.addEventListener('icecandidate', this.onLocalIceCandidate);
+                // 实例化发送通道
+                this.sendChannel = this.localConnection.createDataChannel('webrtc-datachannel');
+                // onopen事件监听
+                this.sendChannel.onopen = this.onSendChannelStateChange;
+                // onclose事件监听
+                this.sendChannel.onclose = this.onSendChannelStateChange;
+
+                this.remoteConnection = new RTCPeerConnection(this.configuration);
+                // 监听远端返回的candidate 信息
+                this.remoteConnection.addEventListener('icecandidate', this.onRemoteIceCandidate);
+                // 远端连接数据到达事件监听
+                this.remoteConnection.ondatachannel = this.receiveChannelCallback;
+
+                try {
+                    this.localConnection.createOffer().then(offer => {
+                        this.onCreateOfferSuccess(offer);
+                    })
+                } catch (e) {
+                    this.onCreateSessionDescriptionError(e);
+                }
+            },
+            onLocalIceCandidate(event){
+                if (event.candidate){
+                    this.remoteConnection.addIceCandidate(event.candidate);
+                }
+            },
+            onRemoteIceCandidate(event){
+                if (event.candidate){
+                    this.localConnection.addIceCandidate(event.candidate);
+                }
+            },
+            onCreateOfferSuccess(offer){
+                this.localConnection.setLocalDescription(offer);
+                this.remoteConnection.setRemoteDescription(offer);
+
+                this.remoteConnection.createAnswer().then(answer=>{
+                    this.onCreateAnswerSuccess(answer);
+                });
+            },
+            onCreateAnswerSuccess(answer){
+                this.remoteConnection.setLocalDescription(answer);
+                this.localConnection.setRemoteDescription(answer);
+            },
+            onCreateSessionDescriptionError(error){
+                console.log(`创建会话描述SD错误:${error.toString()}`);
+            },
+            receiveChannelCallback(event){
+                // 实例化接收通道
+                this.receiveChannel = event.channel;
+                // 接收消息事件监听
+                this.receiveChannel.onmessage = this.onReceiveMessageCallback;
+                // onopen事件监听
+                this.receiveChannel.onopen = this.onReceiveChannelStateChange;
+                // onclose 事件监听
+                this.receiveChannel.onclose = this.onReceiveChannelStateChange
+            },
+            onReceiveChannelStateChange(){
+                let readyState = this.receiveChannel.readyState
+                console.log('接收通道状态:'+readyState);
+            },
+            onSendChannelStateChange(){
+                let readyState = this.sendChannel.readyState;
+                console.log('发送通道状态:' + readyState);
+            },
+            onReceiveMessageCallback(event){
+                console.log('接收的数据:' + event.data);
+                this.dCReceive.value = event.data;
+            },
+            sendData() {
+                let data = this.dCSend.value;
+                this.sendChannel.send(data);
+                console.log('发送数据:'+data);
+            },
+            hangup() {
+                this.localConnection.close();
+                this.remoteConnection.close();
+                this.localConnection = null;
+                this.remoteConnection = null;
+            },
+        }
+    })
+</script>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>webRtcTest</title>
+    <script src="https://cdn.staticfile.org/vue/2.2.2/vue.min.js"></script>
+</head>
+<body>
+<div id="app">
+    <p>{{ message }}</p>
+    <video class="video" id="myVideo" autoplay playsinline></video>
+    <button v-on:click="initMedia">打开摄像头</button>
+</div>
+
+<script>
+    new Vue({
+        el: '#app',
+        data: {
+            message: 'play video!'
+        },
+        methods: {
+           initMedia: function (event) {
+                const constraints = window.constraints = {audio: false, video: true};
+                /* 准备和获取视频流 */
+                navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+                    console.log(this.$refs);
+                    let video = document.getElementById("myVideo");
+                    let videoTracks = stream.getAudioTracks();
+                    console.log('使用的视频设备:' + videoTracks[0]);
+                    // 是浏览器能
+                    window.stream = stream;
+                    video.srcObject = stream;
+                }).catch(function (err) {
+                    if (err.name === 'ConstraintNotSatisfiedError') {
+                        const v = constraints.video;
+                        //  宽高尺寸错误
+                        alert('宽: ' + v.width.exact + " 高:" + v.height.exact);
+                    } else if (err.name === 'permissionDeniedError') {
+                        alert("没权限");
+                    }
+                    alert(err);
+                    console.log(err);
+                })
+            }
+        },
+
+    })
+</script>
+</body>
+</html>

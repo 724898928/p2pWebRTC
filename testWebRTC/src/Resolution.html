@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="./js/vue.min.js"></script>
+</head>
+<body>
+<div id="vue">
+    <h1>{{message}}</h1>
+    <video :class="videoClass" ref="myVideo" playsinline autoplay></video>
+    <select ref="select" style="width: 100px" v-on:change="handleChange">
+        <option value="qvga">QVGA</option>
+        <option value="vga">VGA</option>
+        <option value="hg">高清</option>
+        <option value="fullhd">超清</option>
+        <option value="2k">2K</option>
+        <option value="4k">4K</option>
+        <option value="8k">8K</option>
+    </select>
+    <button @click="dynamicChange">动态设置</button>
+</div>
+</body>
+<style>
+    @import "./css/video-filter.css";
+</style>
+
+
+<script>
+    //QVGA 320*240
+    const qvgaConstraints = {
+        video: {width: {exact: 320}, height: {exact: 240}}
+    };
+    //VGA 640*480
+    const vgaConstraints = {
+        video: {width: {exact: 640}, height: {exact: 480}}
+    };
+    //高清 1280*720
+    const hdConstraints = {
+        video: {width: {exact: 1280}, height: {exact: 720}}
+    };
+    //超清 1920*1080
+    const fullHdConstraints = {
+        video: {width: {exact: 1920}, height: {exact: 1080}}
+    };
+    //2K 2560*1440
+    const twoKConstraints = {
+        video: {width: {exact: 2560}, height: {exact: 1440}}
+    };
+    //4K 4096*2160
+    const fourKConstraints = {
+        video: {width: {exact: 4096}, height: {exact: 2160}}
+    };
+    //8K 7680*4320
+    const eightKConstraints = {
+        video: {width: {exact: 7680}, height: {exact: 4320}}
+    };
+    const constranints = {audio: false, video: true}
+
+    new Vue({
+        el: '#vue',
+        data: {
+            message: '视频滤镜示例',
+            myVideo: null,
+            select: null,
+            videoClass: null,
+            stream: null,
+        },
+        mounted: function () {
+            this.$nextTick(function () {
+                this.initMedia();
+                this.select = this.$refs.select;
+            })
+        },
+        methods: {
+            initMedia() {
+                navigator.mediaDevices.getUserMedia(constranints).then((stream) => {
+                    this.myVideo = this.$refs.myVideo;
+                    let videoTracks = stream.getVideoTracks()
+                    alert(videoTracks[0].label)
+                    window.stream = stream;
+                    this.myVideo.srcObject = stream;
+                }).catch((error) => {
+                    console.log(`getUserMedia错误: ${error.name}`, error);
+                });
+            },
+            handleChange() {
+                switch (this.select.value) {
+                    case 'qvga':
+                        this.getMedia(qvgaConstraints);
+                        break;
+                    case 'vga':
+                        this.getMedia(vgaConstraints);
+                        break;
+                    case 'hg':
+                        this.getMedia(hdConstraints);
+                        break;
+                    case 'fullhd':
+                        this.getMedia(fullHdConstraints);
+                        break;
+                    case '2k':
+                        this.getMedia(twoKConstraints);
+                        break;
+                    case '4k':
+                        this.getMedia(fourKConstraints);
+                        break;
+                    case '8k':
+                        this.getMedia(eightKConstraints);
+                        break;
+                    default:
+                        this.getMedia(constranints);
+                        break;
+                }
+            },
+            getMedia(constraintsParams) {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => {
+                        track.stop();
+                    })
+                }
+                navigator.mediaDevices.getUserMedia(constraintsParams).then((stream) => {
+                    this.stream = window.stream = stream;
+                    this.myVideo.srcObject = stream;
+                    const track = stream.getVideoTracks()[0];
+                    const constraints = track.getConstraints();
+                    console.log('约束条件为:' + JSON.stringify(constraints));
+                }).catch(e => {
+                    console.log(`getUserMedia错误: ${e.name}`, e);
+                })
+            },
+            //动态改变分辨率
+            dynamicChange: (e) => {
+                //获取当前的视频流中的视频轨道
+                const track = window.stream.getVideoTracks()[0];
+                //使用超清约束作为测试条件
+                alert('应用高清效果:' + JSON.stringify(hdConstraints));
+                track.applyConstraints(hdConstraints).then(() => {
+                    alert("动态改变分辨率成功")
+                }).catch(err => {
+                    alert("动态改变分辨率失败 " + err.name);
+                })
+            }
+        }
+    })
+</script>
+</html>
